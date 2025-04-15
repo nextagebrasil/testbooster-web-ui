@@ -51,6 +51,9 @@ from src.utils.agent_state import AgentState
 
 from .custom_message_manager import CustomMessageManager, CustomMessageManagerSettings
 from .custom_views import CustomAgentOutput, CustomAgentStepInfo, CustomAgentState
+import httpx
+import websockets
+
 
 logger = logging.getLogger(__name__)
 
@@ -170,13 +173,21 @@ class CustomAgent(Agent):
             emoji = "🤷"
 
         logger.info(f"{emoji} Eval: {response.current_state.evaluation_previous_goal}")
+        asyncio.create_task(send_test_response("log", {"log": f"{emoji} Eval: {response.current_state.evaluation_previous_goal}"}))
+
         logger.info(f"🧠 New Memory: {response.current_state.important_contents}")
+        asyncio.create_task(send_test_response("log", {"log": f"🧠 New Memory: {response.current_state.important_contents}"}))
+
         logger.info(f"🤔 Thought: {response.current_state.thought}")
+        asyncio.create_task(send_test_response("log", {"log": f"🤔 Thought: {response.current_state.thought}"}))
+
         logger.info(f"🎯 Next Goal: {response.current_state.next_goal}")
+        asyncio.create_task(send_test_response("log", {"log": f"🎯 Next Goal: {response.current_state.next_goal}"}))
+
         for i, action in enumerate(response.action):
-            logger.info(
-                f"🛠️  Action {i + 1}/{len(response.action)}: {action.model_dump_json(exclude_unset=True)}"
-            )
+            log_message = f"🛠️  Action {i + 1}/{len(response.action)}: {action.model_dump_json(exclude_unset=True)}"
+            logger.info(log_message)
+            asyncio.create_task(send_test_response("log", {"log": log_message}))
 
     def _setup_action_models(self) -> None:
         """Setup dynamic action models from controller's registry"""
@@ -204,6 +215,7 @@ class CustomAgent(Agent):
             step_info.memory += important_contents + "\n"
 
         logger.info(f"🧠 All Memory: \n{step_info.memory}")
+        asyncio.create_task(send_test_response("log", {"log": f"🧠 All Memory: \n{step_info.memory}"}))
 
     @time_execution_async("--get_next_action")
     async def get_next_action(self, input_messages: list[BaseMessage]) -> AgentOutput:
@@ -476,3 +488,24 @@ class CustomAgent(Agent):
                     output_path = self.settings.generate_gif
 
                 create_history_gif(task=self.task, history=self.state.history, output_path=output_path)
+
+
+
+async def send_test_response_via_socket(payload: dict):
+    uri = "ws://localhost:5050"
+    try:
+        async with websockets.connect(uri) as websocket:
+            await websocket.send(json.dumps(payload))
+    except Exception as e:
+        print(f"Erro ao enviar via WebSocket: {e}")
+
+async def log_and_send(message: str):
+    logger.info(message)
+    await send_test_response("log", {"log": message})
+
+async def send_test_response(request_id: str, response: any):
+    payload = {
+        'requestId': request_id,
+        'response': response
+    }
+    await send_test_response_via_socket(payload)
