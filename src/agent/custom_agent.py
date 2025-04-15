@@ -499,10 +499,6 @@ async def send_test_response_via_socket(payload: dict):
     except Exception as e:
         print(f"Erro ao enviar via WebSocket: {e}")
 
-async def log_and_send(message: str):
-    logger.info(message)
-    await send_test_response("log", {"log": message})
-
 async def send_test_response(request_id: str, response: any):
     payload = {
         'requestId': request_id,
