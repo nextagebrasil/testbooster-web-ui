@@ -168,16 +168,6 @@ class CustomAgent(Agent):
             injected_agent_state=injected_agent_state,
             context=context,
         )
-        # Handler formatado para capturar os logs que nos interessam
-        websocket_handler = WebSocketLogHandler()
-        formatter = logging.Formatter('%(message)s')
-        websocket_handler.setFormatter(formatter)
-        websocket_handler.setLevel(logging.INFO)
-
-        # Instala globalmente no root logger
-        root_logger = logging.getLogger()
-        if not any(isinstance(h, WebSocketLogHandler) for h in root_logger.handlers):
-            root_logger.addHandler(websocket_handler)
 
         self.state = injected_agent_state or CustomAgentState()
         self.add_infos = add_infos
