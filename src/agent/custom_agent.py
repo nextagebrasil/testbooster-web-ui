@@ -52,7 +52,8 @@ from src.utils.agent_state import AgentState
 from .custom_message_manager import CustomMessageManager, CustomMessageManagerSettings
 from .custom_views import CustomAgentOutput, CustomAgentStepInfo, CustomAgentState
 import httpx
-import websockets
+from websockets.legacy.client import connect
+from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 
 logger = logging.getLogger(__name__)
 
@@ -484,6 +485,8 @@ class CustomAgent(Agent):
             if not self.injected_browser and self.browser:
                 await self.browser.close()
 
+            await close_websocket_connection()
+
             if self.settings.generate_gif:
                 output_path: str = 'agent_history.gif'
                 if isinstance(self.settings.generate_gif, str):
@@ -492,13 +495,23 @@ class CustomAgent(Agent):
                 create_history_gif(task=self.task, history=self.state.history, output_path=output_path)
 
 
+websocket_connection = None  # conexão persistente
+
+
 async def send_test_response_via_socket(payload: dict):
+    global websocket_connection
     uri = "ws://localhost:5050"
+
     try:
-        async with websockets.connect(uri) as websocket:
-            await websocket.send(json.dumps(payload))
+        # conecta se não estiver conectado
+        if websocket_connection is None or websocket_connection.closed:
+            websocket_connection = await connect(uri)
+
+        await websocket_connection.send(json.dumps(payload))
+
     except Exception as e:
         print(f"Erro ao enviar via WebSocket: {e}")
+        websocket_connection = None  # força reconexão na próxima tentativa
 
 
 async def send_test_response(request_id: str, response: any):
@@ -507,3 +520,13 @@ async def send_test_response(request_id: str, response: any):
         'response': response
     }
     await send_test_response_via_socket(payload)
+
+
+async def close_websocket_connection():
+    global websocket_connection
+    if websocket_connection is not None:
+        try:
+            await websocket_connection.close()
+        except Exception:
+            pass
+        websocket_connection = None
