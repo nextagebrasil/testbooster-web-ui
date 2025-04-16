@@ -55,9 +55,33 @@ import httpx
 from websockets.legacy.client import connect
 from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 
+pending_websocket_logs: list[asyncio.Task] = []
+
+
+def track_log_send(coro):
+    task = asyncio.create_task(coro)
+    pending_websocket_logs.append(task)
+    return task
+
+
 logger = logging.getLogger(__name__)
 
 Context = TypeVar('Context')
+
+
+class WebSocketLogHandler(logging.Handler):
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = self.format(record)  # Agora pega o prefixo e emoji!
+            if any(tag in msg for tag in ["📄 Result", "✅ Task completed", "❌ Unfinished"]):
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(send_test_response("log", {"log": msg}))
+                except RuntimeError:
+                    loop = asyncio.get_event_loop()
+                    asyncio.run_coroutine_threadsafe(send_test_response("log", {"log": msg}), loop)
+        except Exception as e:
+            print(f"[WebSocketLogHandler] erro ao emitir log: {e}")
 
 
 class CustomAgent(Agent):
@@ -144,6 +168,17 @@ class CustomAgent(Agent):
             injected_agent_state=injected_agent_state,
             context=context,
         )
+        # Handler formatado para capturar os logs que nos interessam
+        websocket_handler = WebSocketLogHandler()
+        formatter = logging.Formatter('%(message)s')
+        websocket_handler.setFormatter(formatter)
+        websocket_handler.setLevel(logging.INFO)
+
+        # Instala globalmente no root logger
+        root_logger = logging.getLogger()
+        if not any(isinstance(h, WebSocketLogHandler) for h in root_logger.handlers):
+            root_logger.addHandler(websocket_handler)
+
         self.state = injected_agent_state or CustomAgentState()
         self.add_infos = add_infos
         self._message_manager = CustomMessageManager(
@@ -173,23 +208,23 @@ class CustomAgent(Agent):
             emoji = "🤷"
 
         logger.info(f"{emoji} Eval: {response.current_state.evaluation_previous_goal}")
-        asyncio.create_task(
+        track_log_send(
             send_test_response("log", {"log": f"{emoji} Eval: {response.current_state.evaluation_previous_goal}"}))
 
         logger.info(f"🧠 New Memory: {response.current_state.important_contents}")
-        asyncio.create_task(
+        track_log_send(
             send_test_response("log", {"log": f"🧠 New Memory: {response.current_state.important_contents}"}))
 
         logger.info(f"🤔 Thought: {response.current_state.thought}")
-        asyncio.create_task(send_test_response("log", {"log": f"🤔 Thought: {response.current_state.thought}"}))
+        track_log_send(send_test_response("log", {"log": f"🤔 Thought: {response.current_state.thought}"}))
 
         logger.info(f"🎯 Next Goal: {response.current_state.next_goal}")
-        asyncio.create_task(send_test_response("log", {"log": f"🎯 Next Goal: {response.current_state.next_goal}"}))
+        track_log_send(send_test_response("log", {"log": f"🎯 Next Goal: {response.current_state.next_goal}"}))
 
         for i, action in enumerate(response.action):
             log_message = f"🛠️  Action {i + 1}/{len(response.action)}: {action.model_dump_json(exclude_unset=True)}"
             logger.info(log_message)
-            asyncio.create_task(send_test_response("log", {"log": log_message}))
+            track_log_send(send_test_response("log", {"log": log_message}))
 
     def _setup_action_models(self) -> None:
         """Setup dynamic action models from controller's registry"""
@@ -217,7 +252,7 @@ class CustomAgent(Agent):
             step_info.memory += important_contents + "\n"
 
         logger.info(f"🧠 All Memory: \n{step_info.memory}")
-        asyncio.create_task(send_test_response("log", {"log": f"🧠 All Memory: \n{step_info.memory}"}))
+        track_log_send(send_test_response("log", {"log": f"🧠 All Memory: \n{step_info.memory}"}))
 
     @time_execution_async("--get_next_action")
     async def get_next_action(self, input_messages: list[BaseMessage]) -> AgentOutput:
@@ -371,7 +406,9 @@ class CustomAgent(Agent):
                 if not self.state.extracted_content:
                     self.state.extracted_content = step_info.memory
                 result[-1].extracted_content = self.state.extracted_content
-                logger.info(f"📄 Result: {result[-1].extracted_content}")
+                result_log = f"📄 Result: {result[-1].extracted_content}"
+                logger.info(result_log)
+                track_log_send(send_test_response("log", {"log": result_log}))
 
             self.state.consecutive_failures = 0
 
@@ -479,13 +516,18 @@ class CustomAgent(Agent):
                 )
             )
 
+            # Aguarda logs pendentes antes de fechar WebSocket
+
+            if pending_websocket_logs:
+                await asyncio.gather(*pending_websocket_logs, return_exceptions=True)
+
+            await close_websocket_connection()
+
             if not self.injected_browser_context:
                 await self.browser_context.close()
 
             if not self.injected_browser and self.browser:
                 await self.browser.close()
-
-            await close_websocket_connection()
 
             if self.settings.generate_gif:
                 output_path: str = 'agent_history.gif'
@@ -493,6 +535,21 @@ class CustomAgent(Agent):
                     output_path = self.settings.generate_gif
 
                 create_history_gif(task=self.task, history=self.state.history, output_path=output_path)
+
+    async def log_completion(self) -> None:
+        """Log the completion of the task"""
+        logger.info('✅ Task completed')
+        track_log_send(send_test_response("log", {"log": "✅ Task completed"}))
+
+        if self.state.history.is_successful():
+            logger.info('✅ Successfully')
+            track_log_send(send_test_response("log", {"log": "✅ Successfully"}))
+        else:
+            logger.info('❌ Unfinished')
+            track_log_send(send_test_response("log", {"log": "❌ Unfinished"}))
+
+        if self.register_done_callback:
+            await self.register_done_callback(self.state.history)
 
 
 websocket_connection = None  # conexão persistente
@@ -524,6 +581,8 @@ async def send_test_response(request_id: str, response: any):
 
 async def close_websocket_connection():
     global websocket_connection
+    if pending_websocket_logs:
+        await asyncio.gather(*pending_websocket_logs, return_exceptions=True)
     if websocket_connection is not None:
         try:
             await websocket_connection.close()
