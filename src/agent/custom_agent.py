@@ -315,6 +315,7 @@ class CustomAgent(Agent):
     async def step(self, step_info: Optional[CustomAgentStepInfo] = None) -> None:
         """Execute one step of the task"""
         logger.info(f"\n📍 Step {self.state.n_steps}")
+        await send_test_response("log", {"log": f"\n📍 Step {self.state.n_steps}"})
         state = None
         model_output = None
         result: list[ActionResult] = []
