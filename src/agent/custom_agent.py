@@ -54,7 +54,6 @@ from .custom_views import CustomAgentOutput, CustomAgentStepInfo, CustomAgentSta
 import httpx
 import websockets
 
-
 logger = logging.getLogger(__name__)
 
 Context = TypeVar('Context')
@@ -173,10 +172,12 @@ class CustomAgent(Agent):
             emoji = "🤷"
 
         logger.info(f"{emoji} Eval: {response.current_state.evaluation_previous_goal}")
-        asyncio.create_task(send_test_response("log", {"log": f"{emoji} Eval: {response.current_state.evaluation_previous_goal}"}))
+        asyncio.create_task(
+            send_test_response("log", {"log": f"{emoji} Eval: {response.current_state.evaluation_previous_goal}"}))
 
         logger.info(f"🧠 New Memory: {response.current_state.important_contents}")
-        asyncio.create_task(send_test_response("log", {"log": f"🧠 New Memory: {response.current_state.important_contents}"}))
+        asyncio.create_task(
+            send_test_response("log", {"log": f"🧠 New Memory: {response.current_state.important_contents}"}))
 
         logger.info(f"🤔 Thought: {response.current_state.thought}")
         asyncio.create_task(send_test_response("log", {"log": f"🤔 Thought: {response.current_state.thought}"}))
@@ -491,7 +492,6 @@ class CustomAgent(Agent):
                 create_history_gif(task=self.task, history=self.state.history, output_path=output_path)
 
 
-
 async def send_test_response_via_socket(payload: dict):
     uri = "ws://localhost:5050"
     try:
@@ -499,6 +499,7 @@ async def send_test_response_via_socket(payload: dict):
             await websocket.send(json.dumps(payload))
     except Exception as e:
         print(f"Erro ao enviar via WebSocket: {e}")
+
 
 async def send_test_response(request_id: str, response: any):
     payload = {
