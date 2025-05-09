@@ -136,7 +136,7 @@ kubectl logs -l app=testbooster-web-ui -f
 
 
 
-processo resumido:
+# Processo Resumido:
 docker build -f Dockerfile -t us-east1-docker.pkg.dev/testbooster/testbooster-web-ui/testbooster-web-ui:0.0.2 .
 gcloud auth configure-docker us-east1-docker.pkg.dev
 docker push us-east1-docker.pkg.dev/testbooster/testbooster-web-ui/testbooster-web-ui:0.0.2
