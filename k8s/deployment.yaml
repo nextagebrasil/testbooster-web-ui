@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: web-ui
-        image: us-east1-docker.pkg.dev/testbooster/testbooster-web-ui/testbooster-web-ui:latest
+        image: us-east1-docker.pkg.dev/testbooster/testbooster-web-ui/testbooster-web-ui:0.0.2
         ports:
         - containerPort: 7788
         envFrom:

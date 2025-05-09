@@ -133,3 +133,26 @@ http://<EXTERNAL-IP>/
 ```powershell
 kubectl logs -l app=testbooster-web-ui -f
 ```
+
+
+
+processo resumido:
+docker build -f Dockerfile -t us-east1-docker.pkg.dev/testbooster/testbooster-web-ui/testbooster-web-ui:0.0.2 .
+gcloud auth configure-docker us-east1-docker.pkg.dev
+docker push us-east1-docker.pkg.dev/testbooster/testbooster-web-ui/testbooster-web-ui:0.0.2
+gcloud container clusters get-credentials testbooster-web-ui-cluster --region us-central1 --project testbooster
+# 1) Pega o número do projeto
+$projectNumber = gcloud projects describe testbooster --format="value(projectNumber)"
+# 2) Dá permissão ao nó do GKE ler o Artifact Registry
+gcloud artifacts repositories add-iam-policy-binding testbooster-web-ui `
+  --location=us-east1 `
+  --member="serviceAccount:$projectNumber-compute@developer.gserviceaccount.com" `
+  --role="roles/artifactregistry.reader"
+
+`(se teve alteração/criação de variável de ambiente): `kubectl delete secret testbooster-web-ui-env --ignore-not-found
+`(se teve alteração/criação de variável de ambiente): `kubectl create secret generic testbooster-web-ui-env --from-env-file ./.env
+
+´Alterar o número da imagem no k8s\deployment.yaml 
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+
