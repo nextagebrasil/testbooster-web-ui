@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: testbooster-web-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: testbooster-web-ui
+  template:
+    metadata:
+      labels:
+        app: testbooster-web-ui
+    spec:
+      containers:
+      - name: web-ui
+        image: us-east1-docker.pkg.dev/testbooster/testbooster-web-ui/testbooster-web-ui:latest
+        ports:
+        - containerPort: 7788
+        envFrom:
+        - secretRef:
+            name: testbooster-web-ui-env
