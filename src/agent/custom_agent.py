@@ -1,59 +1,42 @@
+import asyncio
 import json
 import logging
-import pdb
-import traceback
-from typing import Any, Awaitable, Callable, Dict, Generic, List, Optional, Type, TypeVar
-from PIL import Image, ImageDraw, ImageFont
 import os
-import base64
-import io
-import asyncio
 import time
-import platform
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Type, TypeVar
+
+from browser_use.agent.gif import create_history_gif
+from browser_use.agent.message_manager.utils import save_conversation
+from browser_use.agent.prompts import PlannerPrompt
 from browser_use.agent.prompts import SystemPrompt, AgentMessagePrompt
 from browser_use.agent.service import Agent
-from browser_use.agent.message_manager.utils import convert_input_messages, extract_json_from_model_output, \
-    save_conversation
 from browser_use.agent.views import (
     ActionResult,
-    AgentError,
-    AgentHistory,
     AgentHistoryList,
     AgentOutput,
-    AgentSettings,
-    AgentState,
-    AgentStepInfo,
     StepMetadata,
     ToolCallingMethod,
 )
-from browser_use.agent.gif import create_history_gif
 from browser_use.browser.browser import Browser
 from browser_use.browser.context import BrowserContext
-from browser_use.browser.views import BrowserStateHistory
+from browser_use.browser.views import BrowserState
 from browser_use.controller.service import Controller
 from browser_use.telemetry.views import (
     AgentEndTelemetryEvent,
-    AgentRunTelemetryEvent,
     AgentStepTelemetryEvent,
 )
 from browser_use.utils import time_execution_async
+from json_repair import repair_json
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import (
     BaseMessage,
-    HumanMessage,
-    AIMessage
+    HumanMessage
 )
-from browser_use.browser.views import BrowserState, BrowserStateHistory
-from browser_use.agent.prompts import PlannerPrompt
+from websockets.legacy.client import connect
 
-from json_repair import repair_json
 from src.utils.agent_state import AgentState
-
 from .custom_message_manager import CustomMessageManager, CustomMessageManagerSettings
 from .custom_views import CustomAgentOutput, CustomAgentStepInfo, CustomAgentState
-import httpx
-from websockets.legacy.client import connect
-from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 
 pending_websocket_logs: list[asyncio.Task] = []
 
@@ -547,7 +530,7 @@ websocket_connection = None  # conexão persistente
 
 async def send_test_response_via_socket(payload: dict):
     global websocket_connection
-    uri = "ws://localhost:5050"
+    uri = os.getenv("TEST_BOOSTER_WEBSOCKET_URL", "")
 
     try:
         # conecta se não estiver conectado
